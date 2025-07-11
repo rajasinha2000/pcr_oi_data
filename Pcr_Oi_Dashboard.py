@@ -28,7 +28,7 @@ if "last_alerts" not in st.session_state:
     st.session_state.last_alerts = {}
 
 # ========== DEFAULT SYMBOLS ==========
-fixed_symbols = {"NIFTY": True,"BANKNIFTY": True,}
+fixed_symbols = {"NIFTY": True,"BANKNIFTY": True,"RELIANCE": False,}
 user_symbols = st.session_state.get("user_symbols", set())
 
 with st.sidebar:
