@@ -1,230 +1,147 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
 import requests
-import plotly.graph_objects as go
+import pandas as pd
+import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
-import time
-from streamlit_autorefresh import st_autorefresh
 
-# ========== CONFIG ==========
-st.set_page_config(page_title="PCR + OI Dashboard", layout="wide")
-st.title("📊 PCR + OI Dashboard (Live)")
-st.caption("Auto-refresh every 5 minutes")
+# === AUTO REFRESH ===
+st_autorefresh(interval=900000, limit=None, key="option_chain_autorefresh")  # 15 mins
 
-# Auto-refresh every 5 minutes (300000 ms)
-st_autorefresh(interval=300000, key="refresh")
+st.subheader("📘 Enhanced NIFTY Option Chain View (Live from NSE)")
 
-# ========== EMAIL CONFIG ==========
-sender_email = "rajasinha2000@gmail.com"
-receiver_email = "mdrinfotech79@gmail.com"
-app_password = "hefy otrq yfji ictv"
+# === EMAIL ALERT FUNCTION ===
+def send_email_alert(subject, message, to_email="mdrinfotech79@gmail.com"):
+    from_email = "rajasinha2000@gmail.com"
+    from_password = "hefy otrq yfji ictv"  # Use app-specific password
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 587
 
-# ========== SESSION STATE ==========
-if "last_alerts" not in st.session_state:
-    st.session_state.last_alerts = {}
-
-# ========== DEFAULT SYMBOLS ==========
-fixed_symbols = {"NIFTY": True,"BANKNIFTY": True,}
-user_symbols = st.session_state.get("user_symbols", set())
-
-with st.sidebar:
-    st.markdown("### ➕ Add/Remove Symbols")
-    new_symbol = st.text_input("Add F&O Stock (e.g., RELIANCE)", "")
-    if st.button("Add Symbol") and new_symbol.strip():
-        user_symbols.add(new_symbol.strip().upper())
-        st.session_state.user_symbols = user_symbols
-
-    remove_symbol = st.selectbox("Remove Symbol", sorted(user_symbols))
-    if st.button("Remove Symbol"):
-        user_symbols.discard(remove_symbol)
-        st.session_state.user_symbols = user_symbols
-
-all_symbols = {**fixed_symbols, **{sym: False for sym in user_symbols}}
-
-# ========== FETCH FUNCTION ==========
-def fetch_option_chain(symbol, is_index=True):
     try:
-        url = f"https://www.nseindia.com/api/option-chain-{'indices' if is_index else 'equities'}?symbol={symbol}"
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json",
-            "Referer": "https://www.nseindia.com"
-        }
-        session = requests.Session()
-        session.get("https://www.nseindia.com", headers=headers, timeout=5)
-        response = session.get(url, headers=headers, timeout=5)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception("Invalid response received from NSE")
-    except Exception as e:
-        raise Exception("Fetch failed for {}: {}".format(symbol, e))
-
-# ========== EMAIL ALERT ==========
-def send_pcr_email_alert(symbol, pcr, bias):
-    try:
-        subject = f"{symbol} PCR Alert: {bias}"
-        body = f"""
-        PCR Alert for {symbol}
-        -----------------------
-        PCR Value: {pcr}
-        Bias: {bias}
-
-        Link: https://www.nseindia.com/option-chain
-
-        - MDR PCR Dashboard
-        """
         msg = MIMEMultipart()
-        msg["From"] = sender_email
-        msg["To"] = receiver_email
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
+        msg['From'] = from_email
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(message, 'plain'))
 
-        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server = smtplib.SMTP(smtp_server, smtp_port)
         server.starttls()
-        server.login(sender_email, app_password)
-        server.sendmail(sender_email, receiver_email, msg.as_string())
+        server.login(from_email, from_password)
+        server.send_message(msg)
         server.quit()
-    except:
-        pass
-
-# ========== PCR ANALYSIS ==========
-def analyze_symbol(symbol, is_index):
-    try:
-        data = fetch_option_chain(symbol, is_index)
-        records = data['records']['data']
-
-        ce_oi_total = 0
-        pe_oi_total = 0
-        ce_oi_change = {}
-        pe_oi_change = {}
-        ce_strike = {}
-        pe_strike = {}
-
-        for entry in records:
-            strike = entry.get("strikePrice")
-            if "CE" in entry:
-                ce = entry["CE"]
-                ce_oi_total += ce.get("openInterest", 0)
-                ce_oi_change[strike] = ce.get("changeinOpenInterest", 0)
-                ce_strike[strike] = ce.get("openInterest", 0)
-            if "PE" in entry:
-                pe = entry["PE"]
-                pe_oi_total += pe.get("openInterest", 0)
-                pe_oi_change[strike] = pe.get("changeinOpenInterest", 0)
-                pe_strike[strike] = pe.get("openInterest", 0)
-
-        pcr = round(pe_oi_total / ce_oi_total, 2) if ce_oi_total else 0
-        support_strike = max(pe_strike, key=pe_strike.get)
-        resistance_strike = max(ce_strike, key=ce_strike.get)
-
-        if pcr >= 1.3:
-            trend = "🔼"
-            bias = "⚠️ Overbought Watch"
-        elif pcr <= 0.8:
-            trend = "🔽"
-            bias = "🟢 Oversold Bias"
-        else:
-            trend = "↔"
-            bias = "⚪ Neutral Bias"
-
-        # Send alert only on bias change
-        if symbol not in st.session_state.last_alerts or st.session_state.last_alerts[symbol] != bias:
-            if pcr >= 1.3 or pcr <= 0.8:
-                send_pcr_email_alert(symbol, pcr, bias)
-            st.session_state.last_alerts[symbol] = bias
-
-        return {
-            "Symbol": symbol,
-            "PCR": pcr,
-            "Trend": trend,
-            "Bias": bias,
-            "Support": support_strike,
-            "S-Shift": "↔",
-            "PUT OI Chg": f"{int(pe_oi_change.get(support_strike, 0)/1000)}K",
-            "Resistance": resistance_strike,
-            "R-Shift": "↔",
-            "CALL OI Chg": f"{int(ce_oi_change.get(resistance_strike, 0)/1000)}K",
-        }
     except Exception as e:
-        return {
-            "Symbol": symbol,
-            "PCR": "-",
-            "Trend": "-",
-            "Bias": f"Error: {e}",
-            "Support": "-", "S-Shift": "-", "PUT OI Chg": "-",
-            "Resistance": "-", "R-Shift": "-", "CALL OI Chg": "-"
-        }
+        st.warning(f"📧 Email alert failed: {e}")
 
-# ========== ANALYZE ALL SYMBOLS ==========
-results = []
-for symbol, is_index in all_symbols.items():
-    results.append(analyze_symbol(symbol, is_index))
+# === FETCH OPTION CHAIN ===
+def get_nifty_option_chain():
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json",
+        "Referer": "https://www.nseindia.com/option-chain"
+    }
+    session = requests.Session()
+    session.headers.update(headers)
 
-df = pd.DataFrame(results)
+    session.get("https://www.nseindia.com", timeout=5)
+    url = "https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY"
+    response = session.get(url, timeout=10)
+    data = response.json()
 
-# ========== STYLE ==========
-def pcr_style(val):
-    try:
-        val = float(val)
-        if val >= 1.3:
-            return "background-color: #2f855a; color: white; font-weight: bold;"
-        elif val <= 0.8:
-            return "background-color: #c53030; color: white; font-weight: bold;"
+    records = data['records']['data']
+    underlying = float(data['records']['underlyingValue'])
+
+    rows = []
+    for item in records:
+        strike = item['strikePrice']
+        ce = item.get('CE', {})
+        pe = item.get('PE', {})
+        rows.append({
+            "Strike": strike,
+            "CE_OI": ce.get("openInterest", 0),
+            "PE_OI": pe.get("openInterest", 0),
+            "Underlying": underlying
+        })
+
+    df = pd.DataFrame(rows)
+    df = df[df["Strike"] % 100 == 0]
+    df = df.sort_values("Strike")
+    return df.reset_index(drop=True)
+
+# === MAIN DISPLAY LOGIC ===
+try:
+    df_oc = get_nifty_option_chain()
+    cmp = df_oc["Underlying"].iloc[0]
+
+    # PCR calculation
+    df_oc["PCR"] = (df_oc["PE_OI"] / df_oc["CE_OI"]).replace([float('inf'), -float('inf')], 0).fillna(0).round(2)
+
+    def classify_pcr(pcr):
+        if pcr > 1.2:
+            return "🟢 Bullish"
+        elif pcr < 0.9:
+            return "🔴 Bearish"
         else:
-            return "background-color: #faf089; color: black; font-weight: bold;"
-    except:
-        return ""
+            return "🟠 Neutral"
 
-styled_df = df.style.applymap(pcr_style, subset=["PCR"])
-st.dataframe(styled_df, use_container_width=True)
+    df_oc["Signal"] = df_oc["PCR"].apply(classify_pcr)
 
-# ========== DOWNLOAD ==========
-csv = df.to_csv(index=False).encode("utf-8")
-st.download_button("📥 Download CSV", csv, "pcr_oi_dashboard.csv", "text/csv")
+    def breakout_chance(ce_oi, pe_oi):
+        spread = abs(ce_oi - pe_oi)
+        total = ce_oi + pe_oi
+        ratio = spread / total if total != 0 else 0
+        if ratio < 0.15:
+            return "🔥 High"
+        elif ratio < 0.3:
+            return "🌥️ Medium"
+        else:
+            return "❄️ Low"
 
-# ========== OI CHART ==========
-selected_symbol = st.selectbox("📌 View OI Chart for", df["Symbol"])
-if selected_symbol in all_symbols:
-    try:
-        is_index = all_symbols[selected_symbol]
-        data = fetch_option_chain(selected_symbol, is_index)
-        records = data['records']['data']
+    df_oc["Breakout Chance"] = df_oc.apply(lambda row: breakout_chance(row["CE_OI"], row["PE_OI"]), axis=1)
 
-        strikes = []
-        ce_oi = []
-        pe_oi = []
+    def trend_direction(signal):
+        if signal == "🟢 Bullish":
+            return "🔼 Uptrend"
+        elif signal == "🔴 Bearish":
+            return "🔽 Downtrend"
+        else:
+            return "🔁 Sideways"
 
-        for entry in records:
-            strike = entry.get("strikePrice")
-            ce = entry.get("CE", {}).get("openInterest", 0)
-            pe = entry.get("PE", {}).get("openInterest", 0)
-            if ce > 0 or pe > 0:
-                strikes.append(strike)
-                ce_oi.append(ce)
-                pe_oi.append(pe)
+    df_oc["Trend"] = df_oc["Signal"].apply(trend_direction)
 
-        df_oi = pd.DataFrame({"Strike": strikes, "CE": ce_oi, "PE": pe_oi}).sort_values("Strike")
-        atm_index = df_oi["PE"].idxmax()
-        chart_df = df_oi.iloc[max(0, atm_index - 5): atm_index + 5]
+    above_cmp = df_oc[df_oc["Strike"] >= cmp].head(5)
+    below_cmp = df_oc[df_oc["Strike"] < cmp].tail(5)
+    df_filtered = pd.concat([below_cmp, above_cmp]).sort_values("Strike")
 
-        fig = go.Figure(data=[
-            go.Bar(name="Call OI", x=chart_df["Strike"], y=chart_df["CE"], marker_color="red"),
-            go.Bar(name="Put OI", x=chart_df["Strike"], y=chart_df["PE"], marker_color="green")
-        ])
-        fig.update_layout(
-            barmode="group",
-            title=f"{selected_symbol} OI Chart (Top 10 strikes)",
-            xaxis_title="Strike Price", yaxis_title="Open Interest"
+    display_cols = ["Strike", "CE_OI", "PE_OI", "PCR", "Signal", "Breakout Chance", "Trend"]
+    st.dataframe(df_filtered[display_cols])
+
+    # Summary
+    max_ce = df_oc.loc[df_oc["CE_OI"].idxmax(), "Strike"]
+    max_pe = df_oc.loc[df_oc["PE_OI"].idxmax(), "Strike"]
+    total_pcr = round(df_oc["PE_OI"].sum() / df_oc["CE_OI"].sum(), 2)
+
+    sentiment = "🟢 Bullish" if total_pcr > 1.2 else "🔴 Bearish" if total_pcr < 0.8 else "🟠 Neutral"
+
+    st.markdown(f"""
+    ### 🧭 Option Chain Summary:
+    - 🔼 **Max CE OI (Resistance)**: `{max_ce}`
+    - 🔽 **Max PE OI (Support)**: `{max_pe}`
+    - ⚖️ **Total PCR**: `{total_pcr}` → {sentiment}
+    - 📍 **Current Price**: `{cmp}`
+    """)
+
+    # === EMAIL ALERT TRIGGER ===
+    if total_pcr > 1.2:
+        send_email_alert(
+            "📈 Bullish Option Chain Signal",
+            f"Total PCR: {total_pcr} indicates a strong bullish bias.\nMax CE OI: {max_ce}, Max PE OI: {max_pe}, CMP: {cmp}"
         )
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"Chart Error: {e}")
+    elif total_pcr < 0.8:
+        send_email_alert(
+            "📉 Bearish Option Chain Signal",
+            f"Total PCR: {total_pcr} indicates a strong bearish bias.\nMax CE OI: {max_ce}, Max PE OI: {max_pe}, CMP: {cmp}"
+        )
 
-# ========== FOOTER ==========
-st.markdown("---")
-st.markdown("Built with ❤️ by MDR — Live PCR, Support/Resistance, OI Analysis")
+except Exception as e:
+    st.error(f"Error fetching option chain: {e}")
