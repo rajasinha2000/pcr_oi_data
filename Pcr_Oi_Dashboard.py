@@ -21,10 +21,7 @@ if "pcr_email_sent" not in st.session_state:
 
 # ========== STOCKS & INDICES ==========
 symbols = {
-    "NIFTY": True,
-    "BANKNIFTY": True,
-    "RELIANCE": False,
-    "HDFCBANK": False,
+    "NIFTY": True, 
 }
 
 # ========== EMAIL CONFIG ==========
