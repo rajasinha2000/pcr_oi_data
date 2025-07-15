@@ -109,12 +109,21 @@ try:
 
     df_oc["Trend"] = df_oc["Signal"].apply(trend_direction)
 
+    # === FILTER: Only keep latest row per Strike ===
+    df_oc = df_oc.sort_values(by=["Strike"], ascending=True).drop_duplicates(subset="Strike", keep="last")
+
+    # Focus on strikes around current market price (CMP)
     above_cmp = df_oc[df_oc["Strike"] >= cmp].head(5)
     below_cmp = df_oc[df_oc["Strike"] < cmp].tail(5)
     df_filtered = pd.concat([below_cmp, above_cmp]).sort_values("Strike")
 
+    # Show filtered and clean table
     display_cols = ["Strike", "CE_OI", "PE_OI", "PCR", "Signal", "Breakout Chance", "Trend"]
-    st.dataframe(df_filtered[display_cols])
+    st.dataframe(df_filtered[display_cols], use_container_width=True)
+
+
+    display_cols = ["Strike", "CE_OI", "PE_OI", "PCR", "Signal", "Breakout Chance", "Trend"]
+    
 
     # Summary
     max_ce = df_oc.loc[df_oc["CE_OI"].idxmax(), "Strike"]
