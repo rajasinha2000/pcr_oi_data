@@ -1,6 +1,5 @@
 streamlit
+yfinance
 pandas
 plotly
-yfinance
-get_nifty_strikes
 streamlit-autorefresh
