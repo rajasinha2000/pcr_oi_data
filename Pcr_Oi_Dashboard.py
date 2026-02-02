@@ -47,6 +47,11 @@ def display_table():
             continue
 
         is_bullish_both = tf5['is_bullish'] and tf15['is_bullish']
+        exit_condition = (
+        tf5.get("exit_signal", False) or
+        tf15.get("exit_signal", False)
+      )
+
 
         row = {
             "Option": symbol,
@@ -57,6 +62,8 @@ def display_table():
             "15m EMA": tf15['ema'],
             "15m Close": tf15['close'],
             "Bullish?": "✅" if is_bullish_both else "❌"
+            "Exit?": "🔻" if exit_condition else ""
+
         }
         result_rows.append(row)
 
@@ -71,6 +78,17 @@ def display_table():
             send_telegram_alert(message)
             st.session_state.alerted.add(symbol)
             st.toast(f"🚨 Alert sent: {symbol}", icon="📢")
+        if exit_condition and symbol in st.session_state.alerted:
+           exit_msg = (
+              f"🔻 *EXIT ALERT* `{symbol}`\n\n"
+              f"Reason: EMA / RSI Break\n\n"
+              f"*5m* → RSI: `{tf5['rsi']}`, EMA: `{tf5['ema']}`, Close: `{tf5['close']}`\n"
+              f"*15m* → RSI: `{tf15['rsi']}`, EMA: `{tf15['ema']}`, Close: `{tf15['close']}`"
+          )
+    send_telegram_alert(exit_msg)
+    st.session_state.alerted.remove(symbol)
+    st.toast(f"🔻 Exit Alert: {symbol}", icon="⚠️")
+
 
     df = pd.DataFrame(result_rows)
     if not df.empty:
@@ -89,4 +107,5 @@ while True:
     time.sleep(refresh_interval)
     with st_autorefresh.container():
         display_table()
+
 
