@@ -63,8 +63,7 @@ def display_table():
             "15m Close": tf15['close'],
             "Bullish?": "✅" if is_bullish_both else "❌"
             "Exit?": "🔻" if exit_condition else ""
-
-        }
+         }
         result_rows.append(row)
 
         if is_bullish_both and symbol not in st.session_state.alerted:
@@ -107,6 +106,7 @@ while True:
     time.sleep(refresh_interval)
     with st_autorefresh.container():
         display_table()
+
 
 
 
