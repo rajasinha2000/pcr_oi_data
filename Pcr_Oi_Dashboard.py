@@ -29,9 +29,7 @@ def display_table():
     expiry = nifty_data["expiry"]
     strikes = nifty_data["strikes"]
 
-    # Add HDFCBANK and RELIANCE options
     strikes += get_stock_strikes("MARUTI.NS")
-    
 
     st.markdown(f"**📍 NIFTY Spot:** `{spot}` | **Expiry:** `{expiry}`")
 
@@ -48,27 +46,27 @@ def display_table():
 
         is_bullish_both = tf5['is_bullish'] and tf15['is_bullish']
         exit_condition = (
-        tf5.get("exit_signal", False) or
-        tf15.get("exit_signal", False)
-      )
+            tf5.get("exit_signal", False) or
+            tf15.get("exit_signal", False)
+        )
 
-
-row = {
-    "Option": symbol,
-    "5m RSI": tf5['rsi'],
-    "5m EMA": tf5['ema'],
-    "5m Close": tf5['close'],
-    "15m RSI": tf15['rsi'],
-    "15m EMA": tf15['ema'],
-    "15m Close": tf15['close'],
-    "Bullish?": "✅" if is_bullish_both else "❌",
-    "Exit?": "🔻" if exit_condition else ""
-}
-
+        # ✅ ROW MUST BE INSIDE LOOP
+        row = {
+            "Option": symbol,
+            "5m RSI": tf5['rsi'],
+            "5m EMA": tf5['ema'],
+            "5m Close": tf5['close'],
+            "15m RSI": tf15['rsi'],
+            "15m EMA": tf15['ema'],
+            "15m Close": tf15['close'],
+            "Bullish?": "✅" if is_bullish_both else "❌",
+            "Exit?": "🔻" if exit_condition else ""
+        }
         result_rows.append(row)
 
+        # 🚀 ENTRY ALERT
         if is_bullish_both and symbol not in st.session_state.alerted:
-            msg_title = f"📈 Stock Alert" if ".NS" in symbol else "🚀 NIFTY Option Alert"
+            msg_title = "📈 Stock Alert" if ".NS" in symbol else "🚀 NIFTY Option Alert"
             message = (
                 f"{msg_title} `{symbol}`\n"
                 f"✅ *Bullish on 5m & 15m*\n\n"
@@ -77,27 +75,36 @@ row = {
             )
             send_telegram_alert(message)
             st.session_state.alerted.add(symbol)
-            st.toast(f"🚨 Alert sent: {symbol}", icon="📢")
+            st.toast(f"🚨 Entry Alert: {symbol}", icon="📢")
+
+        # 🔻 EXIT ALERT
         if exit_condition and symbol in st.session_state.alerted:
-           exit_msg = (
-              f"🔻 *EXIT ALERT* `{symbol}`\n\n"
-              f"Reason: EMA / RSI Break\n\n"
-              f"*5m* → RSI: `{tf5['rsi']}`, EMA: `{tf5['ema']}`, Close: `{tf5['close']}`\n"
-              f"*15m* → RSI: `{tf15['rsi']}`, EMA: `{tf15['ema']}`, Close: `{tf15['close']}`"
-           )
-    send_telegram_alert(exit_msg)
-    st.session_state.alerted.remove(symbol)
-    st.toast(f"🔻 Exit Alert: {symbol}", icon="⚠️")
+            exit_msg = (
+                f"🔻 *EXIT ALERT* `{symbol}`\n\n"
+                f"Reason: EMA / RSI Break\n\n"
+                f"*5m* → RSI: `{tf5['rsi']}`, EMA: `{tf5['ema']}`, Close: `{tf5['close']}`\n"
+                f"*15m* → RSI: `{tf15['rsi']}`, EMA: `{tf15['ema']}`, Close: `{tf15['close']}`"
+            )
+            send_telegram_alert(exit_msg)
+            st.session_state.alerted.remove(symbol)
+            st.toast(f"🔻 Exit Alert: {symbol}", icon="⚠️")
 
-
+    # 📊 TABLE
     df = pd.DataFrame(result_rows)
     if not df.empty:
-        st.dataframe(df.style.apply(
-            lambda row: ['background-color: lightgreen' if row["Bullish?"] == "✅" else '' for _ in row],
-            axis=1
-        ), use_container_width=True)
+        st.dataframe(
+            df.style.apply(
+                lambda row: [
+                    'background-color: lightcoral' if row["Exit?"] == "🔻"
+                    else 'background-color: lightgreen' if row["Bullish?"] == "✅"
+                    else '' for _ in row
+                ],
+                axis=1
+            ),
+            use_container_width=True
+        )
     else:
-        st.warning("⚠️ No bullish signal.")
+        st.warning("⚠️ No signals.")
 
 if run_monitor:
     display_table()
@@ -107,6 +114,7 @@ while True:
     time.sleep(refresh_interval)
     with st_autorefresh.container():
         display_table()
+
 
 
 
