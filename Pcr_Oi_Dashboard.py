@@ -62,7 +62,7 @@ def display_table():
             "15m EMA": tf15['ema'],
             "15m Close": tf15['close'],
             "Bullish?": "✅" if is_bullish_both else "❌"
-            "Exit?": "🔻" if exit_condition else ""
+             "Exit?": "🔻" if exit_condition else ""
 
         }
         result_rows.append(row)
@@ -107,5 +107,6 @@ while True:
     time.sleep(refresh_interval)
     with st_autorefresh.container():
         display_table()
+
 
 
