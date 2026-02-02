@@ -30,8 +30,8 @@ def display_table():
     strikes = nifty_data["strikes"]
 
     # Add HDFCBANK and RELIANCE options
-    strikes += get_stock_strikes("HDFCBANK.NS")
-    strikes += get_stock_strikes("RELIANCE.NS")
+    strikes += get_stock_strikes("MARUTI.NS")
+    
 
     st.markdown(f"**📍 NIFTY Spot:** `{spot}` | **Expiry:** `{expiry}`")
 
@@ -89,3 +89,4 @@ while True:
     time.sleep(refresh_interval)
     with st_autorefresh.container():
         display_table()
+
