@@ -53,17 +53,18 @@ def display_table():
       )
 
 
-        row = {
-            "Option": symbol,
-            "5m RSI": tf5['rsi'],
-            "5m EMA": tf5['ema'],
-            "5m Close": tf5['close'],
-            "15m RSI": tf15['rsi'],
-            "15m EMA": tf15['ema'],
-            "15m Close": tf15['close'],
-            "Bullish?": "✅" if is_bullish_both else "❌"
-            "Exit?": "🔻" if exit_condition else ""
-         }
+row = {
+    "Option": symbol,
+    "5m RSI": tf5['rsi'],
+    "5m EMA": tf5['ema'],
+    "5m Close": tf5['close'],
+    "15m RSI": tf15['rsi'],
+    "15m EMA": tf15['ema'],
+    "15m Close": tf15['close'],
+    "Bullish?": "✅" if is_bullish_both else "❌",
+    "Exit?": "🔻" if exit_condition else ""
+}
+
         result_rows.append(row)
 
         if is_bullish_both and symbol not in st.session_state.alerted:
@@ -106,6 +107,7 @@ while True:
     time.sleep(refresh_interval)
     with st_autorefresh.container():
         display_table()
+
 
 
 
